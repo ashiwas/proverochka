@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --canvas: 249 250 251;     /* gray-50 */
+  --surface: 255 255 255;    /* white */
+  --elevated: 243 244 246;   /* gray-100 */
+  --line: 229 231 235;       /* gray-200 */
+  --ink: 17 24 39;           /* gray-900 */
+  --ink-soft: 75 85 99;      /* gray-600 */
+  --ink-faint: 156 163 175;  /* gray-400 */
+}
+
+.dark {
+  --canvas: 15 17 23;
+  --surface: 23 25 35;
+  --elevated: 32 36 48;
+  --line: 43 47 58;
+  --ink: 229 231 235;
+  --ink-soft: 169 176 189;
+  --ink-faint: 113 120 132;
+}
+
+html, body, #root { height: 100%; }
+body { @apply bg-canvas text-ink antialiased; }
+
+/* В тёмной теме делаем иконки нативных date/time инпутов светлыми */
+.dark input[type="date"]::-webkit-calendar-picker-indicator,
+.dark input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1) opacity(0.6); }

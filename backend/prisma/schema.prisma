@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+}
+
+// Kanban columns:
+// NEW              -> Новый лид
+// DEADLINE_SHIFT   -> Перенос сроков
+// GET_FEEDBACK     -> Получить обратную связь
+// WARM             -> Теплые
+// AWAITING_PAYMENT -> Ждем оплату
+// IN_PROGRESS      -> В работе
+// CLOSED           -> Закрытые
+enum LeadStatus {
+  NEW
+  DEADLINE_SHIFT
+  GET_FEEDBACK
+  WARM
+  AWAITING_PAYMENT
+  IN_PROGRESS
+  CLOSED
+}
+
+enum TaskType {
+  CALL            // Позвонить
+  PROMISED_CALL   // Обещал позвонить
+  GET_FEEDBACK    // Получить обратную связь
+  WORK_CHECK      // Проверка работы
+  START_WORK      // Запуск в работу
+  OTHER           // Другое
+}
+
+// OVERDUE is derived at read-time (status == ACTIVE && dueAt < now),
+// so it is intentionally NOT a stored value here.
+enum TaskStatus {
+  ACTIVE
+  DONE
+}
+
+enum LeadHistoryAction {
+  LEAD_CREATED
+  LEAD_UPDATED
+  STATUS_CHANGED
+  ASSIGNEE_CHANGED
+  TASK_CREATED
+  TASK_UPDATED
+  TASK_COMPLETED
+  TASK_DELETED
+  COMMENT_ADDED
+  COMMENT_DELETED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  login        String   @unique
+  passwordHash String
+  role         Role     @default(MANAGER)
+  isBlocked    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  leads    Lead[]        @relation("LeadAssignee")
+  tasks    Task[]        @relation("TaskAssignee")
+  comments Comment[]
+  history  LeadHistory[]
+}
+
+model Lead {
+  id            String     @id @default(uuid())
+  companyName   String
+  contactName   String
+  mainPhone     String
+  // Array of { name: string, phone: string }
+  extraPhones   Json       @default("[]")
+  website       String?
+  yandexMapsUrl String?
+  twoGisUrl     String?
+  status        LeadStatus @default(NEW)
+  assigneeId    String
+  assignee      User       @relation("LeadAssignee", fields: [assigneeId], references: [id])
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  tasks    Task[]
+  comments Comment[]
+  history  LeadHistory[]
+
+  @@index([assigneeId])
+  @@index([status])
+}
+
+model Task {
+  id          String     @id @default(uuid())
+  type        TaskType   @default(CALL)
+  text        String
+  dueAt       DateTime
+  status      TaskStatus @default(ACTIVE)
+  completedAt DateTime?
+  leadId      String
+  lead        Lead       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assigneeId  String
+  assignee    User       @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([assigneeId])
+  @@index([leadId])
+  @@index([status])
+  @@index([dueAt])
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  text      String
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([leadId])
+}
+
+model LeadHistory {
+  id        String            @id @default(uuid())
+  leadId    String
+  lead      Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User              @relation(fields: [userId], references: [id])
+  action    LeadHistoryAction
+  details   Json?
+  createdAt DateTime          @default(now())
+
+  @@index([leadId])
+}
