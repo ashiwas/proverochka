@@ -33,6 +33,8 @@ tasksRouter.get(
     if (!isAdmin(req)) where.assigneeId = req.user!.id;
     else if (q.managerId) where.assigneeId = q.managerId;
     if (q.leadId) where.leadId = q.leadId;
+    // Не показывать задачи удалённых (soft-delete) лидов.
+    where.lead = { deletedAt: null };
 
     if (q.scope === 'done') where.status = TaskStatus.DONE;
     else if (q.scope === 'active') { where.status = TaskStatus.ACTIVE; where.dueAt = { gte: now }; }
@@ -52,7 +54,7 @@ tasksRouter.post(
   validate({ body: createTaskSchema }),
   asyncHandler(async (req, res) => {
     const body = req.body;
-    const lead = await prisma.lead.findUnique({ where: { id: body.leadId } });
+    const lead = await prisma.lead.findFirst({ where: { id: body.leadId, deletedAt: null } });
     assertLeadAccess(req.user!, lead);
 
     let assigneeId = lead!.assigneeId;

@@ -17,14 +17,17 @@ dashboardRouter.get(
 
     if (isAdmin(req)) {
       const [totalLeads, byStatus, managers, overdue, leadsNoTasks] = await Promise.all([
-        prisma.lead.count(),
-        prisma.lead.groupBy({ by: ['status'], _count: true }),
+        prisma.lead.count({ where: { deletedAt: null } }),
+        prisma.lead.groupBy({ by: ['status'], where: { deletedAt: null }, _count: true }),
         prisma.user.findMany({
           where: { role: Role.MANAGER },
-          select: { id: true, name: true, _count: { select: { leads: true, tasks: true } } },
+          select: {
+            id: true, name: true,
+            _count: { select: { leads: { where: { deletedAt: null } }, tasks: true } },
+          },
         }),
-        prisma.task.count({ where: { status: TaskStatus.ACTIVE, dueAt: { lt: now } } }),
-        prisma.lead.count({ where: { tasks: { none: { status: TaskStatus.ACTIVE } } } }),
+        prisma.task.count({ where: { status: TaskStatus.ACTIVE, dueAt: { lt: now }, lead: { deletedAt: null } } }),
+        prisma.lead.count({ where: { deletedAt: null, tasks: { none: { status: TaskStatus.ACTIVE } } } }),
       ]);
       return res.json({
         role: 'ADMIN',
@@ -38,12 +41,12 @@ dashboardRouter.get(
 
     const me = req.user!.id;
     const [myLeads, byStatus, activeTasks, overdueTasks, todayTasks, leadsNoTasks] = await Promise.all([
-      prisma.lead.count({ where: { assigneeId: me } }),
-      prisma.lead.groupBy({ by: ['status'], where: { assigneeId: me }, _count: true }),
-      prisma.task.count({ where: { assigneeId: me, status: TaskStatus.ACTIVE, dueAt: { gte: now } } }),
-      prisma.task.count({ where: { assigneeId: me, status: TaskStatus.ACTIVE, dueAt: { lt: now } } }),
-      prisma.task.count({ where: { assigneeId: me, dueAt: { gte: start, lte: end } } }),
-      prisma.lead.count({ where: { assigneeId: me, tasks: { none: { status: TaskStatus.ACTIVE } } } }),
+      prisma.lead.count({ where: { assigneeId: me, deletedAt: null } }),
+      prisma.lead.groupBy({ by: ['status'], where: { assigneeId: me, deletedAt: null }, _count: true }),
+      prisma.task.count({ where: { assigneeId: me, status: TaskStatus.ACTIVE, dueAt: { gte: now }, lead: { deletedAt: null } } }),
+      prisma.task.count({ where: { assigneeId: me, status: TaskStatus.ACTIVE, dueAt: { lt: now }, lead: { deletedAt: null } } }),
+      prisma.task.count({ where: { assigneeId: me, dueAt: { gte: start, lte: end }, lead: { deletedAt: null } } }),
+      prisma.lead.count({ where: { assigneeId: me, deletedAt: null, tasks: { none: { status: TaskStatus.ACTIVE } } } }),
     ]);
     res.json({
       role: 'MANAGER',

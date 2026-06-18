@@ -17,6 +17,14 @@ export interface Assignee { id: string; name: string; login?: string; }
 
 export interface ExtraPhone { name: string; phone: string; }
 
+/** Ответ с пагинацией (например, список лидов). */
+export interface Paginated<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 /** Результат глобального поиска по базе (виден всем, без доступа к чужому лиду). */
 export interface LeadLookupResult {
   id: string;

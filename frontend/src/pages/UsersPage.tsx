@@ -22,6 +22,8 @@ export default function UsersPage() {
   useEffect(() => { load(); }, [load]);
 
   const toggleBlock = async (u: User) => {
+    const action = u.isBlocked ? 'Разблокировать' : 'Заблокировать';
+    if (!confirm(`${action} пользователя «${u.name}»?`)) return;
     try { await api.patch(`/users/${u.id}/block`, { isBlocked: !u.isBlocked }); load(); }
     catch (e) { setError(apiError(e)); }
   };

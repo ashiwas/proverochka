@@ -6,7 +6,8 @@ CRM-система для отдела продаж маркетингового
 
 ## Стек
 
-**Backend:** Node.js + Express + TypeScript, PostgreSQL, Prisma ORM, JWT, bcryptjs, Zod (валидация).
+**Backend:** Node.js + Express + TypeScript, PostgreSQL, Prisma ORM, JWT (access + refresh), bcryptjs, Zod (валидация),
+helmet и express-rate-limit (безопасность), Vitest (тесты).
 **Frontend:** React + TypeScript + Vite, TailwindCSS (тёмная тема через `class`), React Router, Zustand, Axios, @dnd-kit (drag & drop), SheetJS/`xlsx` (импорт из Excel).
 
 > В ТЗ предлагались NestJS/Express и react-beautiful-dnd. Выбран **Express** (более лёгкий
@@ -40,6 +41,16 @@ crm/
 
 ## Запуск
 
+### 0. База данных (опционально, через Docker)
+
+Быстрый способ поднять PostgreSQL для разработки:
+
+```bash
+docker compose up -d          # поднимет postgres на localhost:5432 (crm/crm/crm)
+```
+
+Тогда в `backend/.env`: `DATABASE_URL="postgresql://crm:crm@localhost:5432/crm?schema=public"`.
+
 ### 1. Backend
 
 ```bash
@@ -50,14 +61,16 @@ npm run prisma:generate
 npm run prisma:migrate        # создаёт/обновляет таблицы (migrate dev)
 npm run db:seed               # создаёт первого администратора
 npm run dev                   # http://localhost:4000
+npm test                      # модульные тесты (Vitest)
+npm run lint                  # ESLint
 ```
 
-> **Важно про обновление схемы.** Поле `Lead.extraPhones` изменено с `String[]` на `Json`
-> (теперь хранит массив объектов `{ name, phone }` — телефон с подписью). При обновлении
-> существующей базы Prisma попросит создать миграцию: выполните `npm run prisma:migrate`.
-> Если в таблице уже были данные, автоматическое преобразование типа невозможно — согласитесь
-> на reset базы в dev-среде (данные будут пересозданы) либо напишите ручную миграцию
-> `text[] → jsonb` для продакшена.
+> **Важно про обновление схемы.** Поле `Lead.extraPhones` хранит массив объектов
+> `{ name, phone }` (телефон с подписью). Добавлены: `Lead.phoneSearch` (нормализованные
+> цифры всех номеров — для индексированного поиска по телефону на стороне БД),
+> `Lead.deletedAt` (мягкое удаление) и модель `RefreshToken` (refresh-токены сессий).
+> При обновлении базы выполните `npm run prisma:migrate`. Для существующих строк
+> `phoneSearch` заполнится при следующем сохранении лида (либо в dev можно сделать reset).
 
 Переменные окружения (`backend/.env`):
 
@@ -67,7 +80,8 @@ npm run dev                   # http://localhost:4000
 | `PORT` | порт API (по умолчанию 4000) |
 | `CORS_ORIGIN` | origin фронтенда (по умолчанию http://localhost:5173) |
 | `JWT_SECRET` | секрет для подписи JWT |
-| `JWT_EXPIRES_IN` | срок жизни токена (например `7d`) |
+| `JWT_EXPIRES_IN` | срок жизни access-токена (по умолчанию `15m`) |
+| `REFRESH_TOKEN_DAYS` | срок жизни refresh-токена в днях (по умолчанию `30`) |
 | `SEED_ADMIN_NAME/LOGIN/PASSWORD` | данные первого администратора для сид-скрипта |
 
 ### 2. Frontend
@@ -103,9 +117,11 @@ RBAC реализован на уровне API (middleware `authenticate` + `re
 
 ## API (кратко)
 
-`POST /api/auth/login`, `GET /api/auth/me`
-`GET/POST /api/users`, `PATCH /api/users/:id`, `PATCH /api/users/:id/block`, `PATCH /api/users/:id/password`
-`GET/POST /api/leads`, `GET/PATCH/DELETE /api/leads/:id`, `PATCH /api/leads/:id/status`, `PATCH /api/leads/:id/assign`
+`POST /api/auth/login` (отдаёт access + refresh-токен), `POST /api/auth/refresh`, `POST /api/auth/logout`
+`GET /api/auth/me`, `PATCH /api/auth/password` (самостоятельная смена пароля: текущий + новый)
+`GET/POST /api/users`, `PATCH /api/users/:id`, `PATCH /api/users/:id/block`, `PATCH /api/users/:id/password` (сброс пароля админом)
+`GET /api/leads` — список с пагинацией (`page`, `pageSize`, фильтры в БD), возвращает `{ items, total, page, pageSize }`
+`POST /api/leads`, `GET/PATCH/DELETE /api/leads/:id` (DELETE — мягкое удаление), `PATCH /api/leads/:id/status`, `PATCH /api/leads/:id/assign`
 `GET /api/leads/lookup?query=` — глобальный поиск по базе (доступен всем; без доступа к чужому лиду)
 `POST /api/leads/import` — массовый импорт лидов (строки из распарсенного Excel)
 `GET/POST /api/leads/:id/comments`, `DELETE /api/comments/:id`
@@ -120,6 +136,21 @@ RBAC реализован на уровне API (middleware `authenticate` + `re
 - Дата и время задачи хранятся как единый `dueAt` (DateTime); на фронтенде разделяются на поля даты и времени.
 - История изменений пишется транзакционно вместе с действием (создание/изменение лида, смена
   статуса, переназначение, операции с задачами, комментарии).
+- **Безопасность:** `helmet` (security-заголовки), `express-rate-limit` на `/auth/login` и
+  `/auth/refresh` (защита от перебора), лимит размера тела запроса (2 МБ).
+- **Сессии на refresh-токенах:** access-токен короткоживущий (15 мин), при истечении клиент
+  молча обновляет его по refresh-токену (`POST /auth/refresh` с ротацией). В БД хранится только
+  sha256-хэш refresh-токена; logout и смена пароля отзывают активные токены.
+- **Пагинация и фильтры в БД:** `GET /api/leads` фильтрует (статус, компания, телефон, фильтр по
+  задачам) и пагинирует на стороне PostgreSQL. Поиск по телефону — по нормализованной колонке
+  `phoneSearch` (цифры всех номеров), а не перебором в памяти.
+- **Мягкое удаление лидов** (`deletedAt`): запись не стирается физически, чтобы не терять историю.
+  Удалённые лиды исключены из списков, поиска, задач и дашборда.
+- **Импорт Excel устойчив к ошибкам:** каждая строка вставляется в собственной транзакции, поэтому
+  одна некорректная строка не роняет весь импорт (раньше в PostgreSQL первая ошибка переводила
+  общую транзакцию в состояние *aborted*).
+- **Тесты и CI:** модульные тесты на Vitest (`backend/src/**/*.test.ts`); GitHub Actions
+  (`.github/workflows/ci.yml`) гоняет lint + сборку обоих пакетов и тесты бэкенда на каждый PR.
 
 ## Обновления интерфейса и логики
 
@@ -148,6 +179,9 @@ RBAC реализован на уровне API (middleware `authenticate` + `re
 ## Примечание
 
 Проект собран как полностью рабочая основа. В среде сборки не было доступа к сети, поэтому
-`npm install`, миграции и запуск не выполнялись здесь — выполните шаги выше локально.
-Возможные направления для расширения: пагинация списков, refresh-токены, UI для нескольких
-дополнительных телефонов, самостоятельная смена пароля менеджером.
+`npm install`, миграции и запуск не выполнялись здесь — выполните шаги выше локально (включая
+`npm run prisma:migrate` для новых полей схемы и `npm install` для новых зависимостей: helmet,
+express-rate-limit, vitest, eslint, prettier).
+
+Возможные направления для дальнейшего расширения: серверная пагинация задач, экспорт лидов,
+e2e-тесты API (supertest + тестовая БД), восстановление удалённых лидов в UI.

@@ -6,7 +6,8 @@ import { Button, Input, Field, Badge } from '../components/ui';
 export default function ProfilePage() {
   const user = useAuth((s) => s.user);
   const isAdmin = useAuth((s) => s.isAdmin)();
-  const [password, setPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -15,8 +16,8 @@ export default function ProfilePage() {
     if (!user) return;
     setError(''); setDone(false); setLoading(true);
     try {
-      await api.patch(`/users/${user.id}/password`, { password });
-      setDone(true); setPassword('');
+      await api.patch('/auth/password', { currentPassword, newPassword });
+      setDone(true); setCurrentPassword(''); setNewPassword('');
     } catch (e) { setError(apiError(e)); } finally { setLoading(false); }
   };
 
@@ -41,22 +42,21 @@ export default function ProfilePage() {
 
       <div className="mt-5 rounded-xl border border-line bg-surface p-5">
         <h2 className="mb-3 text-sm font-semibold text-ink">Смена пароля</h2>
-        {isAdmin ? (
-          <>
-            {error && <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-            {done && <div className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">Пароль обновлён.</div>}
-            <Field label="Новый пароль (минимум 6 символов)">
-              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-            </Field>
-            <div className="mt-4">
-              <Button onClick={changePassword} disabled={loading || password.length < 6}>Сменить пароль</Button>
-            </div>
-          </>
-        ) : (
-          <p className="text-sm text-ink-soft">
-            Смену пароля выполняет администратор в разделе «Пользователи». Обратитесь к администратору.
-          </p>
-        )}
+        {error && <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+        {done && <div className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">Пароль обновлён.</div>}
+        <div className="space-y-3">
+          <Field label="Текущий пароль">
+            <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+          </Field>
+          <Field label="Новый пароль (минимум 6 символов)">
+            <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+          </Field>
+        </div>
+        <div className="mt-4">
+          <Button onClick={changePassword} disabled={loading || !currentPassword || newPassword.length < 6}>
+            Сменить пароль
+          </Button>
+        </div>
       </div>
     </div>
   );

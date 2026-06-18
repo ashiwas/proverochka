@@ -19,7 +19,7 @@ leadCommentsRouter.use(authenticate);
 leadCommentsRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const lead = await prisma.lead.findUnique({ where: { id: req.params.id } });
+    const lead = await prisma.lead.findFirst({ where: { id: req.params.id, deletedAt: null } });
     assertLeadAccess(req.user!, lead);
     const comments = await prisma.comment.findMany({
       where: { leadId: req.params.id },
@@ -34,7 +34,7 @@ leadCommentsRouter.post(
   '/',
   validate({ body: createSchema }),
   asyncHandler(async (req, res) => {
-    const lead = await prisma.lead.findUnique({ where: { id: req.params.id } });
+    const lead = await prisma.lead.findFirst({ where: { id: req.params.id, deletedAt: null } });
     assertLeadAccess(req.user!, lead);
     const comment = await prisma.$transaction(async (tx) => {
       const c = await tx.comment.create({

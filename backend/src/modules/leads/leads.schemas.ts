@@ -42,6 +42,9 @@ export const leadQuerySchema = z.object({
   phone: z.string().optional(),
   // taskFilter: all | none | active | overdue
   taskFilter: z.enum(['all', 'none', 'active', 'overdue']).optional().default('all'),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  // Канбану нужны все лиды сразу, поэтому верхняя граница большая.
+  pageSize: z.coerce.number().int().min(1).max(500).optional().default(25),
 });
 
 // Глобальный поиск по базе (доступен всем): по названию ИЛИ телефону.
