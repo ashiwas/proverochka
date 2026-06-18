@@ -189,11 +189,16 @@ function InfoPanel({ lead, isAdmin, managers, onChanged }: { lead: Lead; isAdmin
               <Button size="sm" variant="outline" onClick={addPhone}>+ Телефон</Button>
             </div>
             <div className="space-y-2">
+              {extra.length === 0 && <div className="text-xs text-ink-faint">Можно добавить несколько номеров с подписью (например «Бухгалтерия»).</div>}
               {extra.map((e, i) => (
-                <div key={i} className="flex gap-2">
-                  <Input className="w-1/3" placeholder="Имя / отдел" value={e.name} onChange={(ev) => setPhone(i, 'name', ev.target.value)} />
-                  <Input className="flex-1" placeholder="Телефон" value={e.phone} onChange={(ev) => setPhone(i, 'phone', ev.target.value)} />
-                  <Button size="sm" variant="ghost" onClick={() => removePhone(i)}>✕</Button>
+                <div key={i} className="flex items-end gap-2 rounded-lg border border-line bg-elevated p-2.5">
+                  <Field className="w-2/5" label="Имя / отдел">
+                    <Input placeholder="Например, Бухгалтерия" value={e.name} onChange={(ev) => setPhone(i, 'name', ev.target.value)} />
+                  </Field>
+                  <Field className="flex-1" label="Телефон">
+                    <Input placeholder="+7 900 000-00-00" value={e.phone} onChange={(ev) => setPhone(i, 'phone', ev.target.value)} />
+                  </Field>
+                  <Button variant="outline" title="Удалить номер" onClick={() => removePhone(i)}>✕</Button>
                 </div>
               ))}
             </div>

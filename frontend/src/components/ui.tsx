@@ -28,9 +28,9 @@ export function Select({ className, ...p }: React.SelectHTMLAttributes<HTMLSelec
   return <select className={cx('w-full rounded-lg border border-line bg-surface text-ink px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500', className)} {...p} />;
 }
 
-export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+export function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <label className="block">
+    <label className={cx('block', className)}>
       <span className="mb-1 block text-xs font-medium text-ink-soft">{label}</span>
       {children}
     </label>
