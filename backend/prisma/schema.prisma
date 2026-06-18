@@ -69,10 +69,24 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  leads    Lead[]        @relation("LeadAssignee")
-  tasks    Task[]        @relation("TaskAssignee")
-  comments Comment[]
-  history  LeadHistory[]
+  leads         Lead[]         @relation("LeadAssignee")
+  tasks         Task[]         @relation("TaskAssignee")
+  comments      Comment[]
+  history       LeadHistory[]
+  refreshTokens RefreshToken[]
+}
+
+// Хранится только хэш токена (sha256), сам токен живёт у клиента.
+model RefreshToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model Lead {
@@ -82,12 +96,16 @@ model Lead {
   mainPhone     String
   // Array of { name: string, phone: string }
   extraPhones   Json       @default("[]")
+  // Цифры всех номеров (main + доп.) через пробел — для поиска по телефону на стороне БД.
+  phoneSearch   String     @default("")
   website       String?
   yandexMapsUrl String?
   twoGisUrl     String?
   status        LeadStatus @default(NEW)
   assigneeId    String
   assignee      User       @relation("LeadAssignee", fields: [assigneeId], references: [id])
+  // Мягкое удаление: лид не стирается физически, а помечается датой.
+  deletedAt     DateTime?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
@@ -97,6 +115,8 @@ model Lead {
 
   @@index([assigneeId])
   @@index([status])
+  @@index([deletedAt])
+  @@index([phoneSearch])
 }
 
 model Task {

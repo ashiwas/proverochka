@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { Prisma, Role, LeadHistoryAction, TaskStatus } from '@prisma/client';
+import { Prisma, LeadHistoryAction, TaskStatus } from '@prisma/client';
 import { prisma } from '../../prisma';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiError } from '../../utils/errors';
@@ -9,6 +9,7 @@ import { requireAdmin, isAdmin } from '../../middleware/roles';
 import { recordHistory } from '../../services/history.service';
 import { assertLeadAccess } from '../../services/access';
 import { withDerivedStatus } from '../../services/taskStatus';
+import { normalizeExtraPhones, onlyDigits, computePhoneSearch } from './leads.utils';
 import {
   createLeadSchema, updateLeadSchema, statusSchema, assignSchema,
   leadQuerySchema, lookupQuerySchema, importLeadsSchema,
@@ -19,33 +20,8 @@ leadsRouter.use(authenticate);
 
 const assigneeSelect = { id: true, name: true, login: true } as const;
 
-type ExtraPhone = { name: string; phone: string };
-
-/** Привести доп. телефоны к виду [{name, phone}], выкинуть пустые. */
-function normalizeExtraPhones(value: unknown): ExtraPhone[] {
-  if (!Array.isArray(value)) return [];
-  const out: ExtraPhone[] = [];
-  for (const item of value) {
-    if (item && typeof item === 'object' && 'phone' in (item as any)) {
-      const phone = String((item as any).phone || '').trim();
-      if (phone) out.push({ name: String((item as any).name || '').trim(), phone });
-    } else if (typeof item === 'string' && item.trim()) {
-      // на случай старых данных в виде простого массива строк
-      out.push({ name: '', phone: item.trim() });
-    }
-  }
-  return out;
-}
-
-const onlyDigits = (s: string) => s.replace(/\D/g, '');
-
-/** Совпадает ли искомый номер с любым телефоном лида (main + extra). */
-function leadMatchesPhone(lead: { mainPhone: string; extraPhones: unknown }, raw: string): boolean {
-  const q = onlyDigits(raw);
-  if (!q) return false;
-  const phones = [lead.mainPhone, ...normalizeExtraPhones(lead.extraPhones).map((p) => p.phone)];
-  return phones.some((p) => onlyDigits(p).includes(q));
-}
+// Только не удалённые лиды (soft-delete).
+const notDeleted = { deletedAt: null } as const;
 
 /** Build the "card" projection: nextTask + hasOverdueTasks + counts. */
 function decorateLead(lead: any, now = new Date()) {
@@ -68,7 +44,8 @@ leadsRouter.get(
   validate({ query: leadQuerySchema }),
   asyncHandler(async (req, res) => {
     const q = req.query as any;
-    const where: Prisma.LeadWhereInput = {};
+    const now = new Date();
+    const where: Prisma.LeadWhereInput = { ...notDeleted };
 
     // Managers are locked to their own leads.
     if (!isAdmin(req)) where.assigneeId = req.user!.id;
@@ -77,24 +54,35 @@ leadsRouter.get(
     if (q.status) where.status = q.status;
     if (q.company) where.companyName = { contains: q.company, mode: 'insensitive' };
 
-    const leads = await prisma.lead.findMany({
-      where,
-      include: { assignee: { select: assigneeSelect }, tasks: { where: { status: TaskStatus.ACTIVE } } },
-      orderBy: { updatedAt: 'desc' },
+    // Поиск по телефону — по нормализованным цифрам всех номеров (на стороне БД).
+    const phoneDigits = q.phone ? onlyDigits(q.phone) : '';
+    if (phoneDigits) where.phoneSearch = { contains: phoneDigits };
+
+    // Фильтры по задачам — тоже в БД (через связи), чтобы пагинация была корректной.
+    if (q.taskFilter === 'none') where.tasks = { none: { status: TaskStatus.ACTIVE } };
+    else if (q.taskFilter === 'active') where.tasks = { some: { status: TaskStatus.ACTIVE } };
+    else if (q.taskFilter === 'overdue') where.tasks = { some: { status: TaskStatus.ACTIVE, dueAt: { lt: now } } };
+
+    const page = q.page as number;
+    const pageSize = q.pageSize as number;
+
+    const [total, leads] = await prisma.$transaction([
+      prisma.lead.count({ where }),
+      prisma.lead.findMany({
+        where,
+        include: { assignee: { select: assigneeSelect }, tasks: { where: { status: TaskStatus.ACTIVE } } },
+        orderBy: { updatedAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    res.json({
+      items: leads.map((l) => decorateLead(l, now)),
+      total,
+      page,
+      pageSize,
     });
-
-    const now = new Date();
-    let decorated = leads.map((l) => decorateLead(l, now));
-
-    // Поиск по телефону — по всем номерам карточки (main + доп.), считаем в памяти.
-    if (q.phone) decorated = decorated.filter((l) => leadMatchesPhone(l, q.phone));
-
-    // Task-based filters applied in-memory (depend on derived state).
-    if (q.taskFilter === 'none') decorated = decorated.filter((l) => l.activeTaskCount === 0);
-    else if (q.taskFilter === 'active') decorated = decorated.filter((l) => l.activeTaskCount > 0);
-    else if (q.taskFilter === 'overdue') decorated = decorated.filter((l) => l.hasOverdueTasks);
-
-    res.json(decorated);
   }),
 );
 
@@ -108,18 +96,20 @@ leadsRouter.get(
   validate({ query: lookupQuerySchema }),
   asyncHandler(async (req, res) => {
     const query = String((req.query as any).query).trim();
-    const all = await prisma.lead.findMany({
+    const digits = onlyDigits(query);
+
+    const or: Prisma.LeadWhereInput[] = [{ companyName: { contains: query, mode: 'insensitive' } }];
+    if (digits) or.push({ phoneSearch: { contains: digits } });
+
+    const matched = await prisma.lead.findMany({
+      where: { ...notDeleted, OR: or },
       select: {
-        id: true, companyName: true, status: true, mainPhone: true, extraPhones: true,
+        id: true, companyName: true, status: true,
         assigneeId: true, assignee: { select: { id: true, name: true } },
       },
       orderBy: { updatedAt: 'desc' },
+      take: 50,
     });
-
-    const ql = query.toLowerCase();
-    const matched = all.filter(
-      (l) => l.companyName.toLowerCase().includes(ql) || leadMatchesPhone(l, query),
-    ).slice(0, 50);
 
     res.json(
       matched.map((l) => ({
@@ -151,6 +141,7 @@ leadsRouter.post(
           contactName: body.contactName,
           mainPhone: body.mainPhone,
           extraPhones: normalizeExtraPhones(body.extraPhones) as any,
+          phoneSearch: computePhoneSearch(body.mainPhone, body.extraPhones),
           website: body.website || null,
           yandexMapsUrl: body.yandexMapsUrl || null,
           twoGisUrl: body.twoGisUrl || null,
@@ -195,19 +186,22 @@ leadsRouter.post(
     const failed: { row: number; error: string }[] = [];
     let created = 0;
 
-    await prisma.$transaction(async (tx) => {
-      for (let i = 0; i < leads.length; i++) {
-        const row = leads[i];
-        try {
-          let assigneeId = baseAssignee;
-          if (isAdmin(req) && row.assigneeId) assigneeId = row.assigneeId;
+    // Важно: каждая строка — в своей транзакции. Иначе в PostgreSQL первая же
+    // ошибка переводит общую транзакцию в состояние aborted и роняет весь импорт.
+    for (let i = 0; i < leads.length; i++) {
+      const row = leads[i];
+      try {
+        let assigneeId = baseAssignee;
+        if (isAdmin(req) && row.assigneeId) assigneeId = row.assigneeId;
 
+        await prisma.$transaction(async (tx) => {
           const lead = await tx.lead.create({
             data: {
               companyName: row.companyName,
               contactName: row.contactName,
               mainPhone: row.mainPhone,
               extraPhones: normalizeExtraPhones(row.extraPhones) as any,
+              phoneSearch: computePhoneSearch(row.mainPhone, row.extraPhones),
               website: row.website || null,
               yandexMapsUrl: row.yandexMapsUrl || null,
               twoGisUrl: row.twoGisUrl || null,
@@ -220,12 +214,12 @@ leadsRouter.post(
             action: LeadHistoryAction.LEAD_CREATED,
             details: { companyName: lead.companyName, imported: true },
           });
-          created++;
-        } catch (e: any) {
-          failed.push({ row: i + 1, error: e?.message || 'Ошибка строки' });
-        }
+        });
+        created++;
+      } catch (e: any) {
+        failed.push({ row: i + 1, error: e?.message || 'Ошибка строки' });
       }
-    });
+    }
 
     res.status(201).json({ created, failedCount: failed.length, failed });
   }),
@@ -234,8 +228,8 @@ leadsRouter.post(
 leadsRouter.get(
   '/:id',
   asyncHandler(async (req, res) => {
-    const lead = await prisma.lead.findUnique({
-      where: { id: req.params.id },
+    const lead = await prisma.lead.findFirst({
+      where: { id: req.params.id, ...notDeleted },
       include: { assignee: { select: assigneeSelect }, tasks: { where: { status: TaskStatus.ACTIVE } } },
     });
     assertLeadAccess(req.user!, lead);
@@ -247,11 +241,19 @@ leadsRouter.patch(
   '/:id',
   validate({ body: updateLeadSchema }),
   asyncHandler(async (req, res) => {
-    const lead = await prisma.lead.findUnique({ where: { id: req.params.id } });
+    const lead = await prisma.lead.findFirst({ where: { id: req.params.id, ...notDeleted } });
     assertLeadAccess(req.user!, lead);
 
     const data = { ...req.body };
     if (data.extraPhones !== undefined) data.extraPhones = normalizeExtraPhones(data.extraPhones);
+
+    // Пересчитать строку поиска, если менялся любой из телефонов.
+    if (data.mainPhone !== undefined || data.extraPhones !== undefined) {
+      data.phoneSearch = computePhoneSearch(
+        data.mainPhone ?? lead!.mainPhone,
+        data.extraPhones ?? lead!.extraPhones,
+      );
+    }
 
     const updated = await prisma.$transaction(async (tx) => {
       const u = await tx.lead.update({
@@ -278,7 +280,10 @@ leadsRouter.delete(
   '/:id',
   requireAdmin,
   asyncHandler(async (req, res) => {
-    await prisma.lead.delete({ where: { id: req.params.id } });
+    const lead = await prisma.lead.findFirst({ where: { id: req.params.id, ...notDeleted } });
+    if (!lead) throw ApiError.notFound('Лид не найден');
+    // Мягкое удаление: запись сохраняется, чтобы не терять историю «клиента вёл такой-то».
+    await prisma.lead.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
     res.json({ ok: true });
   }),
 );
@@ -287,7 +292,7 @@ leadsRouter.patch(
   '/:id/status',
   validate({ body: statusSchema }),
   asyncHandler(async (req, res) => {
-    const lead = await prisma.lead.findUnique({ where: { id: req.params.id } });
+    const lead = await prisma.lead.findFirst({ where: { id: req.params.id, ...notDeleted } });
     assertLeadAccess(req.user!, lead);
     if (lead!.status === req.body.status) return res.json(lead);
 
@@ -312,7 +317,7 @@ leadsRouter.patch(
   requireAdmin,
   validate({ body: assignSchema }),
   asyncHandler(async (req, res) => {
-    const lead = await prisma.lead.findUnique({ where: { id: req.params.id } });
+    const lead = await prisma.lead.findFirst({ where: { id: req.params.id, ...notDeleted } });
     if (!lead) throw ApiError.notFound('Лид не найден');
     const assignee = await prisma.user.findUnique({ where: { id: req.body.assigneeId } });
     if (!assignee) throw ApiError.badRequest('Менеджер не найден');

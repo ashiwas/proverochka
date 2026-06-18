@@ -11,7 +11,7 @@ leadHistoryRouter.use(authenticate);
 leadHistoryRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const lead = await prisma.lead.findUnique({ where: { id: req.params.id } });
+    const lead = await prisma.lead.findFirst({ where: { id: req.params.id, deletedAt: null } });
     assertLeadAccess(req.user!, lead);
     const history = await prisma.leadHistory.findMany({
       where: { leadId: req.params.id },
