@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, apiError } from '../lib/api';
 import { useAuth } from '../store/auth';
 import { useManagers } from '../lib/useManagers';
-import type { Lead } from '../lib/types';
+import type { Lead, Paginated } from '../lib/types';
 import { LEAD_STATUS_LABELS, LEAD_STATUS_ORDER } from '../lib/labels';
 import { fmtDateTime } from '../lib/format';
 import { Button, Input, Select, Badge } from '../components/ui';
@@ -19,18 +19,26 @@ export default function LeadsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [filters, setFilters] = useState({ status: '', managerId: '', company: '', phone: '', taskFilter: 'all' });
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 25;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+
+  // Сброс на первую страницу при изменении фильтров.
+  useEffect(() => { setPage(1); }, [filters]);
 
   const load = useCallback(async () => {
     try {
-      const params: any = { taskFilter: filters.taskFilter };
+      const params: any = { taskFilter: filters.taskFilter, page, pageSize };
       if (filters.status) params.status = filters.status;
       if (filters.company) params.company = filters.company;
       if (filters.phone) params.phone = filters.phone;
       if (isAdmin && filters.managerId) params.managerId = filters.managerId;
-      const { data } = await api.get('/leads', { params });
-      setLeads(data);
+      const { data } = await api.get<Paginated<Lead>>('/leads', { params });
+      setLeads(data.items);
+      setTotal(data.total);
     } catch (e) { setError(apiError(e)); }
-  }, [filters, isAdmin]);
+  }, [filters, isAdmin, page]);
   useEffect(() => { load(); }, [load]);
 
   const remove = async (id: string) => {
@@ -100,6 +108,15 @@ export default function LeadsPage() {
             {leads.length === 0 && <tr><td colSpan={7} className="px-4 py-10 text-center text-ink-faint">Лидов нет</td></tr>}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between text-sm text-ink-soft">
+        <span>Всего: {total}</span>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>← Назад</Button>
+          <span className="text-xs text-ink-faint">Стр. {page} из {pageCount}</span>
+          <Button size="sm" variant="outline" disabled={page >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))}>Вперёд →</Button>
+        </div>
       </div>
 
       {openId && <LeadModal leadId={openId} onClose={() => setOpenId(null)} onChanged={load} managers={managers} />}

@@ -220,7 +220,10 @@ function TasksPanel({ lead, onChanged }: { lead: Lead; onChanged: () => void }) 
   useEffect(() => { load(); }, [lead.id]);
   const refresh = () => { load(); onChanged(); };
   const complete = async (id: string) => { await api.patch(`/tasks/${id}/complete`); refresh(); };
-  const del = async (id: string) => { await api.delete(`/tasks/${id}`); refresh(); };
+  const del = async (id: string) => {
+    if (!confirm('Удалить задачу?')) return;
+    await api.delete(`/tasks/${id}`); refresh();
+  };
 
   return (
     <div>
@@ -284,7 +287,10 @@ function CommentsPanel({ leadId, isAdmin }: { leadId: string; isAdmin: boolean }
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [items.length]);
 
   const add = async () => { if (!text.trim()) return; await api.post(`/leads/${leadId}/comments`, { text }); setText(''); load(); };
-  const del = async (id: string) => { await api.delete(`/comments/${id}`); load(); };
+  const del = async (id: string) => {
+    if (!confirm('Удалить комментарий?')) return;
+    await api.delete(`/comments/${id}`); load();
+  };
 
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); add(); }

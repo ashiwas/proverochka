@@ -36,7 +36,14 @@ export function Layout() {
     return () => { clearInterval(id); window.removeEventListener('focus', onFocus); };
   }, [loadOverdue]);
 
-  const onLogout = () => { logout(); navigate('/login'); };
+  const onLogout = async () => {
+    const refreshToken = useAuth.getState().refreshToken;
+    if (refreshToken) {
+      try { await api.post('/auth/logout', { refreshToken }); } catch { /* ignore */ }
+    }
+    logout();
+    navigate('/login');
+  };
 
   return (
     <div className="flex h-full">

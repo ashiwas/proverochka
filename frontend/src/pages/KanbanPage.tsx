@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, apiError } from '../lib/api';
 import { useAuth } from '../store/auth';
 import { useManagers } from '../lib/useManagers';
-import type { Lead, LeadStatus } from '../lib/types';
+import type { Lead, LeadStatus, Paginated } from '../lib/types';
 import { LEAD_STATUS_LABELS, LEAD_STATUS_ORDER } from '../lib/labels';
 import { Button, Input, Select } from '../components/ui';
 import { KanbanBoard } from '../features/kanban/KanbanBoard';
@@ -20,12 +20,13 @@ export default function KanbanPage() {
 
   const load = useCallback(async () => {
     try {
-      const params: any = { taskFilter: filters.taskFilter };
+      // Доске нужны все лиды сразу — берём максимально допустимый размер страницы.
+      const params: any = { taskFilter: filters.taskFilter, pageSize: 500 };
       if (isAdmin && filters.managerId) params.managerId = filters.managerId;
       if (filters.company) params.company = filters.company;
       if (filters.phone) params.phone = filters.phone;
-      const { data } = await api.get('/leads', { params });
-      setLeads(data);
+      const { data } = await api.get<Paginated<Lead>>('/leads', { params });
+      setLeads(data.items);
     } catch (e) { setError(apiError(e)); }
   }, [filters, isAdmin]);
 
