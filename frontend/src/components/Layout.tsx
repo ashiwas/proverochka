@@ -11,6 +11,7 @@ const nav = [
   { to: '/leads', label: 'Лиды', icon: '☰' },
   { to: '/tasks', label: 'Задачи', icon: '✓', overdue: true },
   { to: '/search', label: 'Поиск по базе', icon: '⌕' },
+  { to: '/proposals', label: 'КП', icon: '◈' },
   { to: '/users', label: 'Пользователи', icon: '◍', adminOnly: true },
   { to: '/profile', label: 'Профиль', icon: '◌' },
 ];

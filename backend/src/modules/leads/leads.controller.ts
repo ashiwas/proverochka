@@ -13,6 +13,7 @@ import { normalizeExtraPhones, onlyDigits, computePhoneSearch } from './leads.ut
 import {
   createLeadSchema, updateLeadSchema, statusSchema, assignSchema,
   leadQuerySchema, lookupQuerySchema, importLeadsSchema,
+  bulkAssignSchema, bulkStatusSchema, bulkDeleteSchema,
 } from './leads.schemas';
 
 export const leadsRouter = Router();
@@ -53,6 +54,8 @@ leadsRouter.get(
 
     if (q.status) where.status = q.status;
     if (q.company) where.companyName = { contains: q.company, mode: 'insensitive' };
+    if (q.city) where.city = { contains: q.city, mode: 'insensitive' };
+    if (q.timezone) where.timezone = q.timezone;
 
     // Поиск по телефону — по нормализованным цифрам всех номеров (на стороне БД).
     const phoneDigits = q.phone ? onlyDigits(q.phone) : '';
@@ -145,6 +148,8 @@ leadsRouter.post(
           website: body.website || null,
           yandexMapsUrl: body.yandexMapsUrl || null,
           twoGisUrl: body.twoGisUrl || null,
+          city: body.city || null,
+          timezone: body.timezone || null,
           status: 'NEW',
           assigneeId,
         },
@@ -205,6 +210,8 @@ leadsRouter.post(
               website: row.website || null,
               yandexMapsUrl: row.yandexMapsUrl || null,
               twoGisUrl: row.twoGisUrl || null,
+              city: row.city || null,
+              timezone: row.timezone || null,
               status: 'NEW',
               assigneeId,
             },
@@ -263,6 +270,8 @@ leadsRouter.patch(
           website: data.website === undefined ? undefined : data.website || null,
           yandexMapsUrl: data.yandexMapsUrl === undefined ? undefined : data.yandexMapsUrl || null,
           twoGisUrl: data.twoGisUrl === undefined ? undefined : data.twoGisUrl || null,
+          city: data.city === undefined ? undefined : data.city || null,
+          timezone: data.timezone === undefined ? undefined : data.timezone || null,
         },
         include: { assignee: { select: assigneeSelect } },
       });
@@ -335,5 +344,89 @@ leadsRouter.patch(
       return u;
     });
     res.json(updated);
+  }),
+);
+
+/* ─────────────────────────── Массовые действия (только админ) ───────────────────────────
+ * Админ выбирает набор лидов и применяет операцию сразу ко всем: сменить
+ * ответственного, сменить статус или удалить. Это нужно, чтобы после загрузки
+ * большого числа лидов быстро раздать их менеджерам. POST-пути (`/bulk/...`)
+ * выбраны намеренно, чтобы не пересекаться с параметрическими PATCH `/:id/...`.
+ */
+
+leadsRouter.post(
+  '/bulk/assign',
+  requireAdmin,
+  validate({ body: bulkAssignSchema }),
+  asyncHandler(async (req, res) => {
+    const { ids, assigneeId } = req.body as { ids: string[]; assigneeId: string };
+    const assignee = await prisma.user.findUnique({ where: { id: assigneeId } });
+    if (!assignee) throw ApiError.badRequest('Менеджер не найден');
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const leads = await tx.lead.findMany({
+        where: { id: { in: ids }, ...notDeleted },
+        select: { id: true, assigneeId: true },
+      });
+      const toChange = leads.filter((l) => l.assigneeId !== assigneeId);
+      if (toChange.length) {
+        await tx.lead.updateMany({ where: { id: { in: toChange.map((l) => l.id) } }, data: { assigneeId } });
+        await tx.leadHistory.createMany({
+          data: toChange.map((l) => ({
+            leadId: l.id,
+            userId: req.user!.id,
+            action: LeadHistoryAction.ASSIGNEE_CHANGED,
+            details: { from: l.assigneeId, to: assigneeId, bulk: true },
+          })),
+        });
+      }
+      return toChange.length;
+    });
+    res.json({ updated });
+  }),
+);
+
+leadsRouter.post(
+  '/bulk/status',
+  requireAdmin,
+  validate({ body: bulkStatusSchema }),
+  asyncHandler(async (req, res) => {
+    const { ids, status } = req.body as { ids: string[]; status: any };
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const leads = await tx.lead.findMany({
+        where: { id: { in: ids }, ...notDeleted },
+        select: { id: true, status: true },
+      });
+      const toChange = leads.filter((l) => l.status !== status);
+      if (toChange.length) {
+        await tx.lead.updateMany({ where: { id: { in: toChange.map((l) => l.id) } }, data: { status } });
+        await tx.leadHistory.createMany({
+          data: toChange.map((l) => ({
+            leadId: l.id,
+            userId: req.user!.id,
+            action: LeadHistoryAction.STATUS_CHANGED,
+            details: { from: l.status, to: status, bulk: true },
+          })),
+        });
+      }
+      return toChange.length;
+    });
+    res.json({ updated });
+  }),
+);
+
+leadsRouter.post(
+  '/bulk/delete',
+  requireAdmin,
+  validate({ body: bulkDeleteSchema }),
+  asyncHandler(async (req, res) => {
+    const { ids } = req.body as { ids: string[] };
+    // Мягкое удаление, как и в одиночном DELETE — историю не пишем.
+    const { count } = await prisma.lead.updateMany({
+      where: { id: { in: ids }, ...notDeleted },
+      data: { deletedAt: new Date() },
+    });
+    res.json({ updated: count });
   }),
 );

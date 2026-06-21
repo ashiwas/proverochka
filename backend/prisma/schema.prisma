@@ -74,6 +74,7 @@ model User {
   comments      Comment[]
   history       LeadHistory[]
   refreshTokens RefreshToken[]
+  proposals     Proposal[]
 }
 
 // Хранится только хэш токена (sha256), сам токен живёт у клиента.
@@ -101,6 +102,10 @@ model Lead {
   website       String?
   yandexMapsUrl String?
   twoGisUrl     String?
+  // Город клиента и его таймзона в формате IANA (напр. "Europe/Moscow").
+  // GMT-смещение и текущее время в городе вычисляются из timezone на лету.
+  city          String?
+  timezone      String?
   status        LeadStatus @default(NEW)
   assigneeId    String
   assignee      User       @relation("LeadAssignee", fields: [assigneeId], references: [id])
@@ -109,14 +114,16 @@ model Lead {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
-  tasks    Task[]
-  comments Comment[]
-  history  LeadHistory[]
+  tasks     Task[]
+  comments  Comment[]
+  history   LeadHistory[]
+  proposals Proposal[]
 
   @@index([assigneeId])
   @@index([status])
   @@index([deletedAt])
   @@index([phoneSearch])
+  @@index([timezone])
 }
 
 model Task {
@@ -161,5 +168,56 @@ model LeadHistory {
   details   Json?
   createdAt DateTime          @default(now())
 
+  @@index([leadId])
+}
+
+// ───────────────────────── Коммерческие предложения (КП) ─────────────────────────
+
+// Библиотека слайдов-заготовок (конструктор админа). Каждый слайд — отдельный
+// PDF или картинка (PNG/JPEG). Содержимое файла хранится прямо в БД (bytea).
+// Один или несколько слайдов можно пометить «слайдом с ценой»: на него при
+// генерации КП наносится стоимость в заданной (относительной) позиции.
+model ProposalSlide {
+  id           String   @id @default(uuid())
+  title        String
+  fileName     String
+  mimeType     String
+  data         Bytes
+  // Габариты страницы/картинки (в точках/пикселях) — чтобы фронт строил превью
+  // с верной пропорцией, а бэкенд точно позиционировал цену.
+  pageWidth    Float    @default(0)
+  pageHeight   Float    @default(0)
+  // Слайд с областью для цены.
+  isPriceSlide Boolean  @default(false)
+  // Относительная позиция (0..1) и размер шрифта блока с ценой.
+  priceX       Float    @default(0.5)
+  priceY       Float    @default(0.5)
+  priceFontSize Int     @default(28)
+  // Выравнивание блока цены: left | center | right.
+  priceAlign   String   @default("center")
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([sortOrder])
+}
+
+// Сохранённое КП менеджера: какой набор слайдов и какие цены. Готовый PDF
+// не хранится — он собирается на лету при скачивании (можно получить в любой момент).
+model Proposal {
+  id              String   @id @default(uuid())
+  title           String
+  // Порядок слайдов: массив id из ProposalSlide (["id1","id2",...]).
+  slideIds        Json     @default("[]")
+  priceOriginal   Float?
+  priceDiscounted Float?
+  leadId          String?
+  lead            Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  authorId        String
+  author          User     @relation(fields: [authorId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([authorId])
   @@index([leadId])
 }

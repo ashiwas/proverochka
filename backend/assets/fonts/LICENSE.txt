@@ -1,0 +1,5 @@
+The DejaVu fonts (DejaVuSans.ttf, DejaVuSans-Bold.ttf) are bundled here so the
+КП (commercial proposal) PDF generator can render Cyrillic text and the ruble
+sign. DejaVu fonts are released under a permissive free license (Bitstream Vera
++ Arev), which allows redistribution. See:
+https://dejavu-fonts.github.io/License.html

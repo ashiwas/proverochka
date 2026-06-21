@@ -43,6 +43,8 @@ export interface Lead {
   website?: string | null;
   yandexMapsUrl?: string | null;
   twoGisUrl?: string | null;
+  city?: string | null;
+  timezone?: string | null;
   status: LeadStatus;
   assigneeId: string;
   assignee: Assignee;
@@ -78,4 +80,39 @@ export interface Comment {
 export interface HistoryEntry {
   id: string; action: string; details?: any;
   user: { id: string; name: string }; createdAt: string;
+}
+
+/* ───────────────────────────── КП ───────────────────────────── */
+
+export type PriceAlign = 'left' | 'center' | 'right';
+
+export interface ProposalSlide {
+  id: string;
+  title: string;
+  fileName: string;
+  mimeType: string;
+  pageWidth: number;
+  pageHeight: number;
+  isPriceSlide: boolean;
+  priceX: number;
+  priceY: number;
+  priceFontSize: number;
+  priceAlign: PriceAlign;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Proposal {
+  id: string;
+  title: string;
+  slideIds: string[];
+  priceOriginal?: number | null;
+  priceDiscounted?: number | null;
+  leadId?: string | null;
+  author: { id: string; name: string };
+  lead?: { id: string; companyName: string } | null;
+  slideCount?: number;
+  createdAt: string;
+  updatedAt: string;
 }

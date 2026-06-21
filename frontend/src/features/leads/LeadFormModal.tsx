@@ -4,6 +4,7 @@ import { useAuth } from '../../store/auth';
 import type { User, ExtraPhone } from '../../lib/types';
 import { Modal } from '../../components/Modal';
 import { Button, Input, Field, Select } from '../../components/ui';
+import { TimezoneFields } from './TimezoneFields';
 
 export function LeadFormModal({
   open, onClose, onCreated, managers,
@@ -11,7 +12,7 @@ export function LeadFormModal({
   const isAdmin = useAuth((s) => s.isAdmin)();
   const [f, setF] = useState({
     companyName: '', contactName: '', mainPhone: '',
-    website: '', yandexMapsUrl: '', twoGisUrl: '', assigneeId: '',
+    website: '', yandexMapsUrl: '', twoGisUrl: '', city: '', timezone: '', assigneeId: '',
   });
   const [extraPhones, setExtraPhones] = useState<ExtraPhone[]>([]);
   const [error, setError] = useState('');
@@ -30,6 +31,7 @@ export function LeadFormModal({
         companyName: f.companyName, contactName: f.contactName, mainPhone: f.mainPhone,
         extraPhones: extraPhones.filter((e) => e.phone.trim()),
         website: f.website || undefined, yandexMapsUrl: f.yandexMapsUrl || undefined, twoGisUrl: f.twoGisUrl || undefined,
+        city: f.city || undefined, timezone: f.timezone || undefined,
         assigneeId: isAdmin && f.assigneeId ? f.assigneeId : undefined,
       });
       onCreated(); onClose();
@@ -46,6 +48,7 @@ export function LeadFormModal({
         <Field label="Сайт"><Input value={f.website} onChange={(e) => set('website', e.target.value)} placeholder="https://" /></Field>
         <Field label="Яндекс Карты"><Input value={f.yandexMapsUrl} onChange={(e) => set('yandexMapsUrl', e.target.value)} placeholder="https://" /></Field>
         <Field label="2ГИС"><Input value={f.twoGisUrl} onChange={(e) => set('twoGisUrl', e.target.value)} placeholder="https://" /></Field>
+        <TimezoneFields city={f.city} timezone={f.timezone} onCity={(v) => set('city', v)} onTimezone={(v) => set('timezone', v)} />
         {isAdmin && (
           <Field label="Ответственный">
             <Select value={f.assigneeId} onChange={(e) => set('assigneeId', e.target.value)}>

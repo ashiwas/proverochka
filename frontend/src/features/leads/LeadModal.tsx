@@ -7,6 +7,8 @@ import { fmtDateTime } from '../../lib/format';
 import { Modal } from '../../components/Modal';
 import { Button, Input, Field, Select, Textarea, Badge, CopyButton, cx } from '../../components/ui';
 import { TaskFormModal } from '../tasks/TaskFormModal';
+import { TimezoneFields } from './TimezoneFields';
+import { currentTimeInZone, gmtLabelForZone, tzCity, useNow } from '../../lib/timezones';
 
 export function LeadModal({
   leadId, onClose, onChanged, managers,
@@ -88,11 +90,13 @@ function LinkRow({ label, url }: { label: string; url: string }) {
 }
 
 function InfoPanel({ lead, isAdmin, managers, onChanged }: { lead: Lead; isAdmin: boolean; managers: User[]; onChanged: () => void }) {
+  const now = useNow();
   const [editing, setEditing] = useState(false);
   const [msg, setMsg] = useState('');
   const [f, setF] = useState({
     companyName: lead.companyName, contactName: lead.contactName, mainPhone: lead.mainPhone,
     website: lead.website || '', yandexMapsUrl: lead.yandexMapsUrl || '', twoGisUrl: lead.twoGisUrl || '',
+    city: lead.city || '', timezone: lead.timezone || '',
   });
   const [extra, setExtra] = useState<ExtraPhone[]>(lead.extraPhones || []);
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
@@ -101,6 +105,7 @@ function InfoPanel({ lead, isAdmin, managers, onChanged }: { lead: Lead; isAdmin
     setF({
       companyName: lead.companyName, contactName: lead.contactName, mainPhone: lead.mainPhone,
       website: lead.website || '', yandexMapsUrl: lead.yandexMapsUrl || '', twoGisUrl: lead.twoGisUrl || '',
+      city: lead.city || '', timezone: lead.timezone || '',
     });
     setExtra(lead.extraPhones || []);
     setEditing(true);
@@ -137,6 +142,21 @@ function InfoPanel({ lead, isAdmin, managers, onChanged }: { lead: Lead; isAdmin
             <div className="text-xs text-ink-faint">ЛПР</div>
             <div className="text-sm font-medium text-ink">{lead.contactName}</div>
           </div>
+
+          {(lead.city || lead.timezone) && (
+            <div>
+              <div className="text-xs text-ink-faint">Город и время</div>
+              <div className="flex flex-wrap items-center gap-x-2 text-sm">
+                <span className="font-medium text-ink">{lead.city || tzCity(lead.timezone!)}</span>
+                {lead.timezone && (
+                  <span className="text-ink-soft">
+                    · сейчас <span className="font-medium text-ink">{currentTimeInZone(lead.timezone, now)}</span>{' '}
+                    <span className="text-ink-faint">({gmtLabelForZone(lead.timezone, now)})</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <div className="text-xs text-ink-faint">Телефоны</div>
@@ -182,6 +202,7 @@ function InfoPanel({ lead, isAdmin, managers, onChanged }: { lead: Lead; isAdmin
             <Field label="Сайт"><Input value={f.website} onChange={(e) => set('website', e.target.value)} placeholder="https://" /></Field>
             <Field label="Яндекс Карты"><Input value={f.yandexMapsUrl} onChange={(e) => set('yandexMapsUrl', e.target.value)} placeholder="https://" /></Field>
             <Field label="2ГИС"><Input value={f.twoGisUrl} onChange={(e) => set('twoGisUrl', e.target.value)} placeholder="https://" /></Field>
+            <TimezoneFields city={f.city} timezone={f.timezone} onCity={(v) => set('city', v)} onTimezone={(v) => set('timezone', v)} />
           </div>
           <div>
             <div className="mb-2 flex items-center justify-between">

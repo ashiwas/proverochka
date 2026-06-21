@@ -6,6 +6,7 @@ import { tasksRouter } from './modules/tasks/tasks.controller';
 import { leadCommentsRouter, commentsRouter } from './modules/comments/comments.controller';
 import { leadHistoryRouter } from './modules/history/history.controller';
 import { dashboardRouter } from './modules/dashboard/dashboard.controller';
+import { proposalsRouter } from './modules/proposals/proposals.controller';
 
 export const apiRouter = Router();
 
@@ -18,3 +19,4 @@ apiRouter.use('/leads/:id/history', leadHistoryRouter);
 apiRouter.use('/tasks', tasksRouter);
 apiRouter.use('/comments', commentsRouter);
 apiRouter.use('/dashboard', dashboardRouter);
+apiRouter.use('/proposals', proposalsRouter);

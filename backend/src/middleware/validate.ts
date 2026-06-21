@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { AnyZodObject, ZodError } from 'zod';
+import { ZodError, ZodTypeAny } from 'zod';
 import { ApiError } from '../utils/errors';
 
-type Schemas = { body?: AnyZodObject; query?: AnyZodObject; params?: AnyZodObject };
+// ZodTypeAny (а не AnyZodObject), чтобы принимать и refined-схемы (.refine → ZodEffects).
+type Schemas = { body?: ZodTypeAny; query?: ZodTypeAny; params?: ZodTypeAny };
 
 export const validate =
   (schemas: Schemas) =>

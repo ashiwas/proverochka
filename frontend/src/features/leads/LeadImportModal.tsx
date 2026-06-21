@@ -5,6 +5,7 @@ import { useAuth } from '../../store/auth';
 import type { User, ExtraPhone } from '../../lib/types';
 import { Modal } from '../../components/Modal';
 import { Button, Field, Select } from '../../components/ui';
+import { guessTimezone, isValidTimeZone } from '../../lib/timezones';
 
 interface ParsedLead {
   companyName: string;
@@ -14,6 +15,8 @@ interface ParsedLead {
   website?: string;
   yandexMapsUrl?: string;
   twoGisUrl?: string;
+  city?: string;
+  timezone?: string;
 }
 
 // Сопоставление заголовков столбцов (нижний регистр, без пробелов по краям).
@@ -25,6 +28,8 @@ const COLUMN_ALIASES: Record<keyof Omit<ParsedLead, 'extraPhones'> | 'extraPhone
   website: ['сайт', 'website', 'url'],
   yandexMapsUrl: ['яндекс карты', 'яндекс', 'yandex', 'yandex maps'],
   twoGisUrl: ['2гис', '2gis', 'двагис'],
+  city: ['город', 'city'],
+  timezone: ['таймзона', 'часовой пояс', 'timezone', 'tz'],
 };
 
 function pick(row: Record<string, any>, aliases: string[]): string {
@@ -51,11 +56,18 @@ function rowsToLeads(rows: Record<string, any>[]): { valid: ParsedLead[]; invali
       ? extraRaw.split(/[,;]/).map((p) => p.trim()).filter(Boolean).map((phone) => ({ name: '', phone }))
       : [];
 
+    // Таймзона: берём явную (если это валидная IANA-зона), иначе подбираем по городу.
+    const city = pick(row, COLUMN_ALIASES.city);
+    const tzRaw = pick(row, COLUMN_ALIASES.timezone);
+    const timezone = (tzRaw && isValidTimeZone(tzRaw) ? tzRaw : guessTimezone(city)) || undefined;
+
     valid.push({
       companyName, contactName, mainPhone, extraPhones,
       website: pick(row, COLUMN_ALIASES.website) || undefined,
       yandexMapsUrl: pick(row, COLUMN_ALIASES.yandexMapsUrl) || undefined,
       twoGisUrl: pick(row, COLUMN_ALIASES.twoGisUrl) || undefined,
+      city: city || undefined,
+      timezone,
     });
   }
   return { valid, invalid };
@@ -63,8 +75,8 @@ function rowsToLeads(rows: Record<string, any>[]): { valid: ParsedLead[]; invali
 
 function downloadTemplate() {
   const ws = XLSX.utils.aoa_to_sheet([
-    ['Название компании', 'Имя ЛПР', 'Основной телефон', 'Доп. телефон', 'Сайт', 'Яндекс Карты', '2ГИС'],
-    ['ООО Пример', 'Иван Петров', '+7 900 000-00-00', '+7 900 111-11-11', 'https://example.ru', '', ''],
+    ['Название компании', 'Имя ЛПР', 'Основной телефон', 'Доп. телефон', 'Сайт', 'Яндекс Карты', '2ГИС', 'Город', 'Таймзона'],
+    ['ООО Пример', 'Иван Петров', '+7 900 000-00-00', '+7 900 111-11-11', 'https://example.ru', '', '', 'Москва', ''],
   ]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Лиды');
@@ -125,7 +137,8 @@ export function LeadImportModal({
         <div className="space-y-4">
           <p className="text-sm text-ink-soft">
             Загрузите таблицу со столбцами: <b>Название компании</b>, <b>Имя ЛПР</b>, <b>Основной телефон</b> (обязательные),
-            а также по желанию: Доп. телефон, Сайт, Яндекс Карты, 2ГИС.
+            а также по желанию: Доп. телефон, Сайт, Яндекс Карты, 2ГИС, Город, Таймзона.
+            Таймзону можно не заполнять — она подберётся по городу.
           </p>
 
           <div className="flex flex-wrap items-center gap-2">

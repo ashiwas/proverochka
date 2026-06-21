@@ -68,7 +68,7 @@ export function CopyButton({ value, title }: { value: string; title?: string }) 
     } catch {
       const ta = document.createElement('textarea');
       ta.value = value; document.body.appendChild(ta); ta.select();
-      try { document.execCommand('copy'); } catch {}
+      try { document.execCommand('copy'); } catch { /* буфер недоступен — игнорируем */ }
       document.body.removeChild(ta);
     }
     setCopied(true);

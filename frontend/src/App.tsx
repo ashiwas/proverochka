@@ -7,6 +7,7 @@ import KanbanPage from './pages/KanbanPage';
 import LeadsPage from './pages/LeadsPage';
 import TasksPage from './pages/TasksPage';
 import SearchPage from './pages/SearchPage';
+import ProposalsPage from './pages/ProposalsPage';
 import UsersPage from './pages/UsersPage';
 import ProfilePage from './pages/ProfilePage';
 
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="leads" element={<LeadsPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="search" element={<SearchPage />} />
+          <Route path="proposals" element={<ProposalsPage />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route element={<ProtectedRoute adminOnly />}>
             <Route path="users" element={<UsersPage />} />

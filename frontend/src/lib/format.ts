@@ -12,3 +12,13 @@ export const toTimeInput = (iso?: string) => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 export const mergeDateTime = (date: string, time: string) => new Date(`${date}T${time || '00:00'}`).toISOString();
+
+/** Денежная сумма: разряды через неразрывный пробел + ₽. 1234567 → "1 234 567 ₽". */
+export const formatPrice = (value?: number | null): string => {
+  if (value == null || !Number.isFinite(value)) return '—';
+  const rounded = Math.round(value * 100) / 100;
+  const hasFraction = Math.abs(rounded % 1) > 1e-9;
+  const [intPart, fracPart] = Math.abs(rounded).toFixed(hasFraction ? 2 : 0).split('.');
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
+  return `${rounded < 0 ? '-' : ''}${grouped}${fracPart ? ',' + fracPart : ''}\u00A0₽`;
+};
