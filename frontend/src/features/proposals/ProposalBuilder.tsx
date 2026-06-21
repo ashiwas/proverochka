@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api, apiError } from '../../lib/api';
-import { downloadProposalPdf } from '../../lib/download';
+import { downloadProposalPdf, fetchPreviewUrl } from '../../lib/download';
 import type { Proposal, ProposalSlide } from '../../lib/types';
 import { Modal } from '../../components/Modal';
 import { Button, Input, Field, Badge, cx } from '../../components/ui';
@@ -27,6 +27,11 @@ export function ProposalBuilder({
   const [priceDiscounted, setPriceDiscounted] = useState(proposal?.priceDiscounted != null ? String(proposal.priceDiscounted) : '');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  // Освобождаем object-URL предпросмотра при замене/закрытии.
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
   const byId = useMemo(() => new Map(slides.map((s) => [s.id, s])), [slides]);
   const selectedSlides = selectedIds.map((id) => byId.get(id)).filter(Boolean) as ProposalSlide[];
@@ -60,6 +65,19 @@ export function ProposalBuilder({
     }
     const { data } = await api.post('/proposals', payload);
     return data.id as string;
+  };
+
+  const showPreview = async () => {
+    if (selectedIds.length === 0) { setError('Выберите слайды для предпросмотра'); return; }
+    setError(''); setPreviewLoading(true);
+    try {
+      const url = await fetchPreviewUrl({
+        slideIds: selectedIds,
+        priceOriginal: toNum(priceOriginal),
+        priceDiscounted: toNum(priceDiscounted),
+      });
+      setPreviewUrl(url);
+    } catch (e) { setError(apiError(e)); } finally { setPreviewLoading(false); }
   };
 
   const canSave = title.trim().length > 0 && selectedIds.length > 0;
@@ -160,8 +178,21 @@ export function ProposalBuilder({
         </div>
       </div>
 
-      <div className="mt-5 flex justify-end gap-2">
+      {previewUrl && (
+        <div className="mt-4">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-sm font-semibold text-ink">Предпросмотр PDF</span>
+            <button className="text-xs text-ink-faint hover:text-ink" onClick={() => setPreviewUrl(null)}>Скрыть</button>
+          </div>
+          <embed src={previewUrl} type="application/pdf" className="h-[460px] w-full rounded-lg border border-line" />
+        </div>
+      )}
+
+      <div className="mt-5 flex flex-wrap justify-end gap-2">
         <Button variant="outline" onClick={onClose}>Отмена</Button>
+        <Button variant="outline" onClick={showPreview} disabled={previewLoading || selectedIds.length === 0}>
+          {previewLoading ? 'Готовим…' : 'Предпросмотр'}
+        </Button>
         <Button variant="outline" onClick={() => save(false)} disabled={loading || !canSave}>Сохранить</Button>
         <Button onClick={() => save(true)} disabled={loading || !canSave}>{loading ? 'Готовим…' : 'Сохранить и скачать PDF'}</Button>
       </div>

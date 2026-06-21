@@ -1,5 +1,15 @@
 import { api } from './api';
 
+/** Предпросмотр КП без сохранения: вернёт object-URL собранного PDF (освободите URL потом). */
+export async function fetchPreviewUrl(payload: {
+  slideIds: string[];
+  priceOriginal: number | null;
+  priceDiscounted: number | null;
+}): Promise<string> {
+  const { data } = await api.post('/proposals/preview-pdf', payload, { responseType: 'blob' });
+  return URL.createObjectURL(data);
+}
+
 /** Скачать готовый КП в PDF: тянем blob с авторизацией и сохраняем файлом. */
 export async function downloadProposalPdf(proposalId: string, title: string): Promise<void> {
   const { data } = await api.get(`/proposals/${proposalId}/pdf`, { responseType: 'blob' });

@@ -57,3 +57,10 @@ export const proposalUpdateSchema = z
     leadId: z.string().uuid().nullable().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, 'Нет полей для обновления');
+
+// Предпросмотр КП без сохранения: набор слайдов + цены.
+export const proposalPreviewSchema = z.object({
+  slideIds: z.array(z.string().uuid()).min(1, 'Выберите хотя бы один слайд').max(100),
+  priceOriginal: optionalPrice,
+  priceDiscounted: optionalPrice,
+});

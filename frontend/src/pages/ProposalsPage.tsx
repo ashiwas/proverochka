@@ -4,6 +4,7 @@ import { useAuth } from '../store/auth';
 import { downloadProposalPdf } from '../lib/download';
 import type { Proposal, ProposalSlide } from '../lib/types';
 import { fmtDateTime, formatPrice } from '../lib/format';
+import { flash } from '../lib/toast';
 import { Button, cx } from '../components/ui';
 import { SlideConstructor } from '../features/proposals/SlideConstructor';
 import { ProposalBuilder } from '../features/proposals/ProposalBuilder';
@@ -44,6 +45,19 @@ export default function ProposalsPage() {
     catch (e) { setError(apiError(e)); }
   };
 
+  const duplicate = async (p: Proposal) => {
+    try {
+      await api.post('/proposals', {
+        title: `${p.title} (копия)`,
+        slideIds: p.slideIds,
+        priceOriginal: p.priceOriginal ?? null,
+        priceDiscounted: p.priceDiscounted ?? null,
+      });
+      loadProposals();
+      flash('КП продублировано');
+    } catch (e) { setError(apiError(e)); }
+  };
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
@@ -79,6 +93,7 @@ export default function ProposalsPage() {
           onCreate={openCreate}
           onEdit={openEdit}
           onDownload={download}
+          onDuplicate={duplicate}
           onDelete={remove}
         />
       )}
@@ -96,7 +111,7 @@ export default function ProposalsPage() {
 }
 
 function ProposalsList({
-  proposals, isAdmin, busyId, slidesEmpty, onCreate, onEdit, onDownload, onDelete,
+  proposals, isAdmin, busyId, slidesEmpty, onCreate, onEdit, onDownload, onDuplicate, onDelete,
 }: {
   proposals: Proposal[];
   isAdmin: boolean;
@@ -105,6 +120,7 @@ function ProposalsList({
   onCreate: () => void;
   onEdit: (p: Proposal) => void;
   onDownload: (p: Proposal) => void;
+  onDuplicate: (p: Proposal) => void;
   onDelete: (p: Proposal) => void;
 }) {
   if (slidesEmpty && proposals.length === 0) {
@@ -167,6 +183,7 @@ function ProposalsList({
                     {busyId === p.id ? '…' : 'Скачать PDF'}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => onEdit(p)}>Изменить</Button>
+                  <Button size="sm" variant="ghost" onClick={() => onDuplicate(p)} title="Дублировать">⧉</Button>
                   <Button size="sm" variant="ghost" onClick={() => onDelete(p)} title="Удалить">🗑</Button>
                 </div>
               </td>

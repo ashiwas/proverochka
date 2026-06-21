@@ -9,9 +9,30 @@ import { requireAdmin, isAdmin } from '../../middleware/roles';
 import { Role } from '@prisma/client';
 import {
   slideCreateSchema, slideUpdateSchema, slideReorderSchema,
-  proposalCreateSchema, proposalUpdateSchema,
+  proposalCreateSchema, proposalUpdateSchema, proposalPreviewSchema,
 } from './proposals.schemas';
 import { buildProposalPdf, measureSlide, isSupportedSlideMime } from './proposals.pdf';
+
+/** Собрать PDF из набора слайдов (в заданном порядке) и цен. */
+async function renderPdf(slideIds: string[], priceOriginal?: number | null, priceDiscounted?: number | null) {
+  const slides = await prisma.proposalSlide.findMany({ where: { id: { in: slideIds } } });
+  const byId = new Map(slides.map((s) => [s.id, s]));
+  const ordered = slideIds.map((id) => byId.get(id)).filter(Boolean) as typeof slides;
+  return buildProposalPdf({
+    slides: ordered.map((s) => ({
+      data: s.data,
+      mimeType: s.mimeType,
+      isPriceSlide: s.isPriceSlide,
+      priceX: s.priceX,
+      priceY: s.priceY,
+      priceFontSize: s.priceFontSize,
+      priceAlign: s.priceAlign,
+      priceColor: s.priceColor,
+    })),
+    priceOriginal,
+    priceDiscounted,
+  });
+}
 
 export const proposalsRouter = Router();
 proposalsRouter.use(authenticate);
@@ -198,6 +219,22 @@ proposalsRouter.get(
   }),
 );
 
+// Предпросмотр КП без сохранения — отдаём собранный PDF на лету.
+proposalsRouter.post(
+  '/preview-pdf',
+  validate({ body: proposalPreviewSchema }),
+  asyncHandler(async (req, res) => {
+    const { slideIds, priceOriginal, priceDiscounted } = req.body as {
+      slideIds: string[]; priceOriginal?: number | null; priceDiscounted?: number | null;
+    };
+    await ensureSlidesExist(slideIds);
+    const pdf = await renderPdf(slideIds, priceOriginal ?? null, priceDiscounted ?? null);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="preview.pdf"');
+    res.send(Buffer.from(pdf));
+  }),
+);
+
 proposalsRouter.post(
   '/',
   validate({ body: proposalCreateSchema }),
@@ -274,24 +311,7 @@ proposalsRouter.get(
     assertProposalAccess(req.user!, proposal as any);
 
     const ids = (Array.isArray(proposal!.slideIds) ? proposal!.slideIds : []) as string[];
-    const slides = await prisma.proposalSlide.findMany({ where: { id: { in: ids } } });
-    const byId = new Map(slides.map((s) => [s.id, s]));
-    const ordered = ids.map((id) => byId.get(id)).filter(Boolean) as typeof slides;
-
-    const pdf = await buildProposalPdf({
-      slides: ordered.map((s) => ({
-        data: s.data,
-        mimeType: s.mimeType,
-        isPriceSlide: s.isPriceSlide,
-        priceX: s.priceX,
-        priceY: s.priceY,
-        priceFontSize: s.priceFontSize,
-        priceAlign: s.priceAlign,
-        priceColor: s.priceColor,
-      })),
-      priceOriginal: proposal!.priceOriginal,
-      priceDiscounted: proposal!.priceDiscounted,
-    });
+    const pdf = await renderPdf(ids, proposal!.priceOriginal, proposal!.priceDiscounted);
 
     const safeName = (proposal!.title || 'КП').replace(/[\\/:*?"<>|\r\n]+/g, '_').slice(0, 80);
     const asciiName = safeName.replace(/[^\x20-\x7E]+/g, '_') || 'proposal';

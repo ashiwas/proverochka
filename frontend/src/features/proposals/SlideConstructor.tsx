@@ -230,7 +230,13 @@ function SlideEditModal({ slide, onClose, onSaved }: { slide: ProposalSlide; onC
 
         <div>
           {isPriceSlide ? (
-            <PricePlacementPreview slide={slide} x={x} y={y} onPick={(nx, ny) => { setX(nx); setY(ny); }} />
+            <>
+              <PricePlacementPreview
+                slide={slide} x={x} y={y} onPick={(nx, ny) => { setX(nx); setY(ny); }}
+                fontSize={fontSize} color={color} align={align} original={150000} discounted={119900}
+              />
+              <p className="mt-1 text-center text-xs text-ink-faint">Образец цены — перетащите в нужное место</p>
+            </>
           ) : (
             <div className="h-72 overflow-hidden rounded-lg border border-line bg-elevated"><SlidePreview slide={slide} /></div>
           )}
