@@ -195,6 +195,8 @@ model ProposalSlide {
   priceFontSize Int     @default(28)
   // Выравнивание блока цены: left | center | right.
   priceAlign   String   @default("center")
+  // Цвет основной (итоговой) цены в HEX, напр. "#1A1A1A".
+  priceColor   String   @default("#1A1A1A")
   sortOrder    Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

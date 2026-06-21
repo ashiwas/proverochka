@@ -98,6 +98,7 @@ export interface ProposalSlide {
   priceY: number;
   priceFontSize: number;
   priceAlign: PriceAlign;
+  priceColor: string;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;

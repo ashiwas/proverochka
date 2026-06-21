@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 const alignEnum = z.enum(['left', 'center', 'right']);
+// HEX-цвет вида #RGB или #RRGGBB.
+const hexColor = z.string().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Цвет должен быть в формате #RRGGBB');
 
 // multipart присылает всё строками: "false" у z.coerce.boolean стало бы true,
 // поэтому трактуем явно — только "true"/"1"/true означают истину.
@@ -14,6 +16,7 @@ export const slideCreateSchema = z.object({
   priceY: z.coerce.number().min(0).max(1).optional().default(0.5),
   priceFontSize: z.coerce.number().int().min(6).max(200).optional().default(28),
   priceAlign: alignEnum.optional().default('center'),
+  priceColor: hexColor.optional().default('#1A1A1A'),
   sortOrder: z.coerce.number().int().optional().default(0),
 });
 
@@ -26,6 +29,7 @@ export const slideUpdateSchema = z
     priceY: z.number().min(0).max(1).optional(),
     priceFontSize: z.number().int().min(6).max(200).optional(),
     priceAlign: alignEnum.optional(),
+    priceColor: hexColor.optional(),
     sortOrder: z.number().int().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, 'Нет полей для обновления');

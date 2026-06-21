@@ -35,9 +35,13 @@ export const TIMEZONES: TimezoneInfo[] = [
   { iana: 'Asia/Baku', city: 'Баку' },
 ];
 
-// Крупные города → таймзона. Помогает автоподстановке зоны при вводе города
-// в форме и при импорте из Excel (если в таблице есть колонка «Город»).
+// Крупные города → таймзона (IANA). В России нет перехода на летнее время, поэтому
+// города сгруппированы по текущему смещению на представительную зону того же GMT —
+// время и фильтр по таймзоне при этом остаются корректными.
 export const CITY_TO_TZ: Record<string, string> = {
+  // GMT+2
+  'калининград': 'Europe/Kaliningrad',
+  // GMT+3 (Москва и европейская часть)
   'москва': 'Europe/Moscow',
   'санкт-петербург': 'Europe/Moscow',
   'спб': 'Europe/Moscow',
@@ -51,39 +55,102 @@ export const CITY_TO_TZ: Record<string, string> = {
   'сочи': 'Europe/Moscow',
   'тула': 'Europe/Moscow',
   'ярославль': 'Europe/Moscow',
-  'калининград': 'Europe/Kaliningrad',
+  'рязань': 'Europe/Moscow',
+  'липецк': 'Europe/Moscow',
+  'пенза': 'Europe/Moscow',
+  'киров': 'Europe/Moscow',
+  'чебоксары': 'Europe/Moscow',
+  'калуга': 'Europe/Moscow',
+  'брянск': 'Europe/Moscow',
+  'курск': 'Europe/Moscow',
+  'иваново': 'Europe/Moscow',
+  'тверь': 'Europe/Moscow',
+  'белгород': 'Europe/Moscow',
+  'владимир': 'Europe/Moscow',
+  'архангельск': 'Europe/Moscow',
+  'мурманск': 'Europe/Moscow',
+  'ставрополь': 'Europe/Moscow',
+  'махачкала': 'Europe/Moscow',
+  'грозный': 'Europe/Moscow',
+  'владикавказ': 'Europe/Moscow',
+  'нальчик': 'Europe/Moscow',
+  'саранск': 'Europe/Moscow',
+  'вологда': 'Europe/Moscow',
+  'кострома': 'Europe/Moscow',
+  'орёл': 'Europe/Moscow',
+  'орел': 'Europe/Moscow',
+  'тамбов': 'Europe/Moscow',
+  'смоленск': 'Europe/Moscow',
+  'псков': 'Europe/Moscow',
+  'великий новгород': 'Europe/Moscow',
+  'петрозаводск': 'Europe/Moscow',
+  'сыктывкар': 'Europe/Moscow',
+  'симферополь': 'Europe/Moscow',
+  'севастополь': 'Europe/Moscow',
+  'сургут': 'Europe/Moscow',
+  'нижневартовск': 'Europe/Moscow',
+  'балашиха': 'Europe/Moscow',
+  'подольск': 'Europe/Moscow',
+  'химки': 'Europe/Moscow',
+  // GMT+4
   'самара': 'Europe/Samara',
   'ижевск': 'Europe/Samara',
+  'тольятти': 'Europe/Samara',
+  'саратов': 'Europe/Samara',
+  'энгельс': 'Europe/Samara',
+  'ульяновск': 'Europe/Samara',
+  'астрахань': 'Europe/Samara',
+  // GMT+5
   'екатеринбург': 'Asia/Yekaterinburg',
   'челябинск': 'Asia/Yekaterinburg',
   'уфа': 'Asia/Yekaterinburg',
   'пермь': 'Asia/Yekaterinburg',
   'тюмень': 'Asia/Yekaterinburg',
   'оренбург': 'Asia/Yekaterinburg',
+  'магнитогорск': 'Asia/Yekaterinburg',
+  'курган': 'Asia/Yekaterinburg',
+  // GMT+6
   'омск': 'Asia/Omsk',
+  // GMT+7
   'новосибирск': 'Asia/Novosibirsk',
   'барнаул': 'Asia/Novosibirsk',
   'томск': 'Asia/Novosibirsk',
   'кемерово': 'Asia/Novosibirsk',
   'новокузнецк': 'Asia/Novosibirsk',
   'красноярск': 'Asia/Krasnoyarsk',
+  'абакан': 'Asia/Krasnoyarsk',
+  'норильск': 'Asia/Krasnoyarsk',
+  // GMT+8
   'иркутск': 'Asia/Irkutsk',
   'улан-удэ': 'Asia/Irkutsk',
+  'братск': 'Asia/Irkutsk',
+  // GMT+9
   'якутск': 'Asia/Yakutsk',
+  'чита': 'Asia/Yakutsk',
+  'благовещенск': 'Asia/Yakutsk',
+  // GMT+10
   'владивосток': 'Asia/Vladivostok',
   'хабаровск': 'Asia/Vladivostok',
+  'комсомольск-на-амуре': 'Asia/Vladivostok',
+  // GMT+11
   'магадан': 'Asia/Magadan',
+  'южно-сахалинск': 'Asia/Magadan',
+  // GMT+12
   'петропавловск-камчатский': 'Asia/Kamchatka',
+  'анадырь': 'Asia/Kamchatka',
+  // Ближнее зарубежье
   'минск': 'Europe/Minsk',
   'киев': 'Europe/Kyiv',
   'алматы': 'Asia/Almaty',
+  'нур-султан': 'Asia/Almaty',
+  'астана': 'Asia/Almaty',
   'ташкент': 'Asia/Tashkent',
   'тбилиси': 'Asia/Tbilisi',
   'ереван': 'Asia/Yerevan',
   'баку': 'Asia/Baku',
 };
 
-/** Список названий городов для подсказок (datalist). */
+/** Города с заглавной для подсказок (отсортированы). */
 export const CITY_SUGGESTIONS = Object.keys(CITY_TO_TZ)
   .map((c) => c.charAt(0).toUpperCase() + c.slice(1))
   .sort((a, b) => a.localeCompare(b, 'ru'));
@@ -92,6 +159,23 @@ export const CITY_SUGGESTIONS = Object.keys(CITY_TO_TZ)
 export function guessTimezone(city: string): string {
   if (!city) return '';
   return CITY_TO_TZ[city.trim().toLowerCase()] || '';
+}
+
+/** Поиск городов по началу/вхождению строки — для автокомплита. */
+export function searchCities(query: string, limit = 8): { city: string; tz: string }[] {
+  const q = query.trim().toLowerCase();
+  const entries = Object.entries(CITY_TO_TZ).map(([k, tz]) => ({
+    city: k.charAt(0).toUpperCase() + k.slice(1),
+    tz,
+    key: k,
+  }));
+  const matches = q
+    ? entries
+        .filter((e) => e.key.includes(q))
+        // сначала те, что начинаются с запроса
+        .sort((a, b) => Number(b.key.startsWith(q)) - Number(a.key.startsWith(q)) || a.key.localeCompare(b.key, 'ru'))
+    : entries.sort((a, b) => a.key.localeCompare(b.key, 'ru'));
+  return matches.slice(0, limit).map(({ city, tz }) => ({ city, tz }));
 }
 
 /** Валидна ли строка как IANA-таймзона. */

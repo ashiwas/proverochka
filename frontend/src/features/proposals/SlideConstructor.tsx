@@ -6,6 +6,7 @@ import { Button, Input, Field, Select, Badge } from '../../components/ui';
 import { SlidePreview, PricePlacementPreview } from './SlidePreview';
 
 const ALIGN_LABELS: Record<PriceAlign, string> = { left: 'По левому краю', center: 'По центру', right: 'По правому краю' };
+const PRICE_COLOR_PRESETS = ['#1A1A1A', '#E11D48', '#2563EB', '#16A34A', '#D97706', '#7C3AED'];
 
 export function SlideConstructor({ slides, onChanged }: { slides: ProposalSlide[]; onChanged: () => void }) {
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -77,14 +78,25 @@ export function SlideConstructor({ slides, onChanged }: { slides: ProposalSlide[
   );
 }
 
+const ACCEPT_MIME = ['application/pdf', 'image/png', 'image/jpeg'];
+
 function SlideUploadModal({ open, onClose, onUploaded }: { open: boolean; onClose: () => void; onUploaded: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [isPriceSlide, setIsPriceSlide] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const reset = () => { setFile(null); setTitle(''); setIsPriceSlide(false); setError(''); };
+
+  const acceptFile = (f: File | null) => {
+    if (!f) return;
+    if (!ACCEPT_MIME.includes(f.type)) { setError('Поддерживаются только PDF, PNG и JPEG'); return; }
+    setError('');
+    setFile(f);
+    if (!title) setTitle(f.name.replace(/\.[^.]+$/, ''));
+  };
 
   const submit = async () => {
     if (!file) { setError('Выберите файл слайда'); return; }
@@ -103,24 +115,24 @@ function SlideUploadModal({ open, onClose, onUploaded }: { open: boolean; onClos
     <Modal open={open} onClose={onClose} title="Добавить слайд">
       {error && <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
       <div className="space-y-3">
-        <div>
-          <label className="cursor-pointer">
-            <span className="inline-flex items-center rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
-              Выбрать файл
-            </span>
-            <input
-              type="file" accept="application/pdf,image/png,image/jpeg" className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0] || null;
-                setFile(f);
-                if (f && !title) setTitle(f.name.replace(/\.[^.]+$/, ''));
-                e.target.value = '';
-              }}
-            />
-          </label>
-          {file && <span className="ml-2 text-sm text-ink-faint">{file.name}</span>}
-          <p className="mt-1 text-xs text-ink-faint">Поддерживаются PDF, PNG, JPEG (до 30 МБ).</p>
-        </div>
+        <label
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); acceptFile(e.dataTransfer.files?.[0] || null); }}
+          className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-8 text-center transition ${
+            dragOver ? 'border-brand-500 bg-brand-50' : 'border-line bg-elevated hover:border-brand-300'}`}
+        >
+          <input
+            type="file" accept="application/pdf,image/png,image/jpeg" className="hidden"
+            onChange={(e) => { acceptFile(e.target.files?.[0] || null); e.target.value = ''; }}
+          />
+          <div className="text-3xl">📄</div>
+          <div className="mt-1 text-sm font-medium text-ink">
+            {file ? file.name : 'Перетащите файл сюда или нажмите, чтобы выбрать'}
+          </div>
+          <div className="mt-0.5 text-xs text-ink-faint">PDF, PNG, JPEG · до 30 МБ</div>
+        </label>
+
         <Field label="Название слайда *">
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Например, Титульный лист" />
         </Field>
@@ -144,6 +156,7 @@ function SlideEditModal({ slide, onClose, onSaved }: { slide: ProposalSlide; onC
   const [y, setY] = useState(slide.priceY);
   const [fontSize, setFontSize] = useState(slide.priceFontSize);
   const [align, setAlign] = useState<PriceAlign>(slide.priceAlign);
+  const [color, setColor] = useState(slide.priceColor || '#1A1A1A');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -157,6 +170,7 @@ function SlideEditModal({ slide, onClose, onSaved }: { slide: ProposalSlide; onC
         priceY: y,
         priceFontSize: fontSize,
         priceAlign: align,
+        priceColor: color,
       });
       onSaved(); onClose();
     } catch (e) { setError(apiError(e)); } finally { setLoading(false); }
@@ -191,8 +205,24 @@ function SlideEditModal({ slide, onClose, onSaved }: { slide: ProposalSlide; onC
                   </Select>
                 </Field>
               </div>
+              <Field label="Цвет итоговой цены">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color" value={color} onChange={(e) => setColor(e.target.value)}
+                    className="h-9 w-12 cursor-pointer rounded border border-line bg-surface p-0.5"
+                  />
+                  {PRICE_COLOR_PRESETS.map((c) => (
+                    <button
+                      key={c} type="button" title={c} onClick={() => setColor(c)}
+                      style={{ background: c }}
+                      className={`h-7 w-7 rounded-full border-2 ${color.toLowerCase() === c.toLowerCase() ? 'border-ink' : 'border-line'}`}
+                    />
+                  ))}
+                  <span className="text-xs text-ink-faint">{color.toUpperCase()}</span>
+                </div>
+              </Field>
               <div className="text-xs text-ink-faint">
-                Позиция: X {Math.round(x * 100)}% · Y {Math.round(y * 100)}%
+                Позиция: X {Math.round(x * 100)}% · Y {Math.round(y * 100)}% · перетащите маркер мышкой
               </div>
             </>
           )}

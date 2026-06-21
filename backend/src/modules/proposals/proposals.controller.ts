@@ -34,7 +34,7 @@ const uploadSingle =
 const slideMetaSelect = {
   id: true, title: true, fileName: true, mimeType: true,
   pageWidth: true, pageHeight: true, isPriceSlide: true,
-  priceX: true, priceY: true, priceFontSize: true, priceAlign: true,
+  priceX: true, priceY: true, priceFontSize: true, priceAlign: true, priceColor: true,
   sortOrder: true, createdAt: true, updatedAt: true,
 } as const;
 
@@ -115,6 +115,7 @@ proposalsRouter.post(
         priceY: body.priceY,
         priceFontSize: body.priceFontSize,
         priceAlign: body.priceAlign,
+        priceColor: body.priceColor,
         sortOrder: total,
       },
       select: slideMetaSelect,
@@ -286,6 +287,7 @@ proposalsRouter.get(
         priceY: s.priceY,
         priceFontSize: s.priceFontSize,
         priceAlign: s.priceAlign,
+        priceColor: s.priceColor,
       })),
       priceOriginal: proposal!.priceOriginal,
       priceDiscounted: proposal!.priceDiscounted,

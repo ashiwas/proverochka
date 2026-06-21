@@ -57,6 +57,18 @@ export interface SlideInput {
   priceY: number;
   priceFontSize: number;
   priceAlign: string;
+  priceColor?: string;
+}
+
+/** HEX (#RGB или #RRGGBB) → rgb() pdf-lib; при ошибке — почти чёрный. */
+function hexToRgb(hex?: string): ReturnType<typeof rgb> {
+  const fallback = rgb(0.1, 0.1, 0.1);
+  if (!hex) return fallback;
+  let h = hex.trim().replace(/^#/, '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  if (h.length !== 6 || /[^0-9a-fA-F]/.test(h)) return fallback;
+  const n = parseInt(h, 16);
+  return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
 }
 
 export interface ProposalPdfInput {
@@ -102,14 +114,15 @@ function drawPriceBlock(
   const size = Math.min(200, Math.max(6, slide.priceFontSize || 28));
   const align = slide.priceAlign === 'left' || slide.priceAlign === 'right' ? slide.priceAlign : 'center';
 
+  const mainColor = hexToRgb(slide.priceColor);
   type Line = { text: string; size: number; font: PDFFont; strike?: boolean; color: ReturnType<typeof rgb> };
   const lines: Line[] = [];
   if (hasOrig && hasDisc) {
-    // Старая цена зачёркнута и приглушена, новая — крупная и жирная.
+    // Старая цена зачёркнута и приглушена, новая — крупная, жирная, заданного цвета.
     lines.push({ text: formatMoney(original as number), size: size * 0.62, font, strike: true, color: rgb(0.5, 0.5, 0.5) });
-    lines.push({ text: formatMoney(discounted as number), size, font: bold, color: rgb(0.1, 0.1, 0.1) });
+    lines.push({ text: formatMoney(discounted as number), size, font: bold, color: mainColor });
   } else {
-    lines.push({ text: formatMoney((hasDisc ? discounted : original) as number), size, font: bold, color: rgb(0.1, 0.1, 0.1) });
+    lines.push({ text: formatMoney((hasDisc ? discounted : original) as number), size, font: bold, color: mainColor });
   }
 
   let cursorTop = topY;

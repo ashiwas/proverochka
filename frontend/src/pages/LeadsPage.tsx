@@ -2,14 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, apiError } from '../lib/api';
 import { useAuth } from '../store/auth';
 import { useManagers } from '../lib/useManagers';
-import type { Lead, Paginated, User } from '../lib/types';
+import type { Lead, Paginated } from '../lib/types';
 import { LEAD_STATUS_LABELS, LEAD_STATUS_ORDER } from '../lib/labels';
 import { fmtDateTime } from '../lib/format';
+import { flash } from '../lib/toast';
 import { TIMEZONES, tzOptionLabel, tzCity, currentTimeInZone, gmtLabelForZone, useNow } from '../lib/timezones';
 import { Button, Input, Select, Badge } from '../components/ui';
 import { LeadModal } from '../features/leads/LeadModal';
 import { LeadFormModal } from '../features/leads/LeadFormModal';
 import { LeadImportModal } from '../features/leads/LeadImportModal';
+import { BulkBar } from '../features/leads/BulkBar';
+import { bulkAssign, bulkStatus, bulkDelete } from '../features/leads/bulkActions';
 
 const EMPTY_FILTERS = { status: '', managerId: '', company: '', phone: '', city: '', timezone: '', taskFilter: 'all' };
 
@@ -108,26 +111,17 @@ export default function LeadsPage() {
           count={selected.size}
           managers={managers}
           onAssign={async (assigneeId) => {
-            try {
-              const { data } = await api.post('/leads/bulk/assign', { ids: [...selected], assigneeId });
-              setSelected(new Set()); load();
-              setError(''); flash(`Переназначено лидов: ${data.updated}`);
-            } catch (e) { setError(apiError(e)); }
+            try { const n = await bulkAssign([...selected], assigneeId); setSelected(new Set()); load(); setError(''); flash(`Переназначено лидов: ${n}`); }
+            catch (e) { setError(apiError(e)); }
           }}
           onStatus={async (status) => {
-            try {
-              const { data } = await api.post('/leads/bulk/status', { ids: [...selected], status });
-              setSelected(new Set()); load();
-              setError(''); flash(`Изменён статус у лидов: ${data.updated}`);
-            } catch (e) { setError(apiError(e)); }
+            try { const n = await bulkStatus([...selected], status); setSelected(new Set()); load(); setError(''); flash(`Изменён статус у лидов: ${n}`); }
+            catch (e) { setError(apiError(e)); }
           }}
           onDelete={async () => {
             if (!confirm(`Удалить выбранные лиды (${selected.size})?`)) return;
-            try {
-              const { data } = await api.post('/leads/bulk/delete', { ids: [...selected] });
-              setSelected(new Set()); load();
-              setError(''); flash(`Удалено лидов: ${data.updated}`);
-            } catch (e) { setError(apiError(e)); }
+            try { const n = await bulkDelete([...selected]); setSelected(new Set()); load(); setError(''); flash(`Удалено лидов: ${n}`); }
+            catch (e) { setError(apiError(e)); }
           }}
           onClear={() => setSelected(new Set())}
         />
@@ -226,53 +220,6 @@ export default function LeadsPage() {
       {openId && <LeadModal leadId={openId} onClose={() => setOpenId(null)} onChanged={load} managers={managers} />}
       <LeadFormModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={load} managers={managers} />
       <LeadImportModal open={importOpen} onClose={() => setImportOpen(false)} onImported={load} managers={managers} />
-    </div>
-  );
-}
-
-// Лёгкое всплывающее уведомление (без библиотек) — короткий тост сверху.
-function flash(text: string) {
-  const el = document.createElement('div');
-  el.textContent = text;
-  el.className = 'fixed left-1/2 top-4 z-[100] -translate-x-1/2 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-surface shadow-lg';
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2500);
-}
-
-function BulkBar({
-  count, managers, onAssign, onStatus, onDelete, onClear,
-}: {
-  count: number;
-  managers: User[];
-  onAssign: (assigneeId: string) => void;
-  onStatus: (status: string) => void;
-  onDelete: () => void;
-  onClear: () => void;
-}) {
-  const [assigneeId, setAssigneeId] = useState('');
-  const [status, setStatus] = useState('');
-
-  return (
-    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2.5">
-      <span className="text-sm font-semibold text-brand-700">Выбрано: {count}</span>
-      <span className="mx-1 h-5 w-px bg-brand-200" />
-
-      <Select className="w-52" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
-        <option value="">Назначить менеджера…</option>
-        {managers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-      </Select>
-      <Button size="sm" disabled={!assigneeId} onClick={() => onAssign(assigneeId)}>Назначить</Button>
-
-      <span className="mx-1 h-5 w-px bg-brand-200" />
-      <Select className="w-48" value={status} onChange={(e) => setStatus(e.target.value)}>
-        <option value="">Сменить статус…</option>
-        {LEAD_STATUS_ORDER.map((s) => <option key={s} value={s}>{LEAD_STATUS_LABELS[s]}</option>)}
-      </Select>
-      <Button size="sm" disabled={!status} onClick={() => onStatus(status)}>Применить</Button>
-
-      <span className="mx-1 h-5 w-px bg-brand-200" />
-      <Button size="sm" variant="danger" onClick={onDelete}>Удалить</Button>
-      <Button size="sm" variant="ghost" onClick={onClear}>Снять выделение</Button>
     </div>
   );
 }

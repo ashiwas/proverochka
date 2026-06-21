@@ -68,20 +68,31 @@ export function PricePlacementPreview({
 }) {
   const url = useSlideFile(slide.id);
   const ref = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState(false);
   const ratio = slide.pageWidth > 0 && slide.pageHeight > 0 ? slide.pageHeight / slide.pageWidth : 1.414;
 
-  const pick = (e: React.MouseEvent) => {
+  const place = (clientX: number, clientY: number) => {
     const el = ref.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const nx = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    const ny = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
+    const nx = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const ny = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height));
     onPick(Number(nx.toFixed(4)), Number(ny.toFixed(4)));
+  };
+  const onDown = (e: React.PointerEvent) => {
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    setDragging(true);
+    place(e.clientX, e.clientY);
+  };
+  const onMove = (e: React.PointerEvent) => { if (dragging) place(e.clientX, e.clientY); };
+  const onUp = (e: React.PointerEvent) => {
+    setDragging(false);
+    try { (e.currentTarget as Element).releasePointerCapture?.(e.pointerId); } catch { /* ignore */ }
   };
 
   return (
     <div className="relative w-full overflow-hidden rounded-lg border border-line bg-elevated" style={{ paddingBottom: `${ratio * 100}%` }}>
-      {/* Слой со слайдом — только визуальный, клики не ловит. */}
+      {/* Слой со слайдом — только визуальный, события не ловит. */}
       <div className="pointer-events-none absolute inset-0">
         {url ? (
           isPdf(slide.mimeType) ? (
@@ -93,8 +104,14 @@ export function PricePlacementPreview({
           <div className="flex h-full items-center justify-center text-xs text-ink-faint">Загрузка…</div>
         )}
       </div>
-      {/* Прозрачный слой для выбора позиции. */}
-      <div ref={ref} className="absolute inset-0 cursor-crosshair" onClick={pick}>
+      {/* Прозрачный слой: клик ставит позицию, перетаскивание двигает маркер. */}
+      <div
+        ref={ref}
+        className={`absolute inset-0 touch-none ${dragging ? 'cursor-grabbing' : 'cursor-crosshair'}`}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+      >
         <div
           className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2"
           style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
